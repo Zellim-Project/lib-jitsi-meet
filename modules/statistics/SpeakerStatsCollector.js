@@ -1,5 +1,5 @@
 import * as JitsiConferenceEvents from '../../JitsiConferenceEvents';
-import XMPPEvents from '../../service/xmpp/XMPPEvents';
+import { XMPPEvents } from '../../service/xmpp/XMPPEvents';
 
 import SpeakerStats from './SpeakerStats';
 
@@ -41,6 +41,9 @@ export default class SpeakerStatsCollector {
         conference.addEventListener(
             JitsiConferenceEvents.DISPLAY_NAME_CHANGED,
             this._onDisplayNameChange.bind(this));
+        conference.addEventListener(
+            JitsiConferenceEvents.FACE_LANDMARK_ADDED,
+            this._onFaceLandmarkAdd.bind(this));
         if (conference.xmpp) {
             conference.xmpp.addListener(
                 XMPPEvents.SPEAKER_STATS_RECEIVED,
@@ -118,11 +121,26 @@ export default class SpeakerStatsCollector {
     }
 
     /**
+     * Processes a new face landmark object of a remote user.
+     *
+     * @param {string} userId - The user id of the user that left.
+     * @param {Object} data - The face landmark object.
+     * @returns {void}
+     * @private
+     */
+    _onFaceLandmarkAdd(userId, data) {
+        const savedUser = this.stats.users[userId];
+
+        if (savedUser && data.faceExpression) {
+            savedUser.addFaceExpression(data.faceExpression, data.duration);
+        }
+    }
+
+    /**
      * Return a copy of the tracked SpeakerStats models.
      *
      * @returns {Object} The keys are the user ids and the values are the
      * associated user's SpeakerStats model.
-     * @private
      */
     getStats() {
         return this.stats.users;
@@ -158,6 +176,8 @@ export default class SpeakerStatsCollector {
 
             speakerStatsToUpdate.totalDominantSpeakerTime
                 = newStats[userId].totalDominantSpeakerTime;
+
+            speakerStatsToUpdate.setFaceExpressions(newStats[userId].faceExpressions);
         }
     }
 }

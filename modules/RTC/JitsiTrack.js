@@ -1,9 +1,8 @@
-/* global __filename, module */
+import { getLogger } from '@jitsi/logger';
 import EventEmitter from 'events';
-import { getLogger } from 'jitsi-meet-logger';
 
 import * as JitsiTrackEvents from '../../JitsiTrackEvents';
-import * as MediaType from '../../service/RTC/MediaType';
+import { MediaType } from '../../service/RTC/MediaType';
 import browser from '../browser';
 
 import RTCUtils from './RTCUtils';
@@ -172,6 +171,13 @@ export default class JitsiTrack extends EventEmitter {
                 this._addMediaStreamInactiveHandler(this._streamInactiveHandler);
             }
         }
+    }
+
+    /**
+     * Returns the video type (camera or desktop) of this track.
+     */
+    getVideoType() {
+        return this.videoType;
     }
 
     /**

@@ -40,7 +40,7 @@ export default class JibriSession {
     /**
      * Returns the initiator of the session instance.
      *
-     * @returns {JitsiParticipant|undefined} The participant that started the session.
+     * @returns {JitsiParticipant|string} The participant that started the session.
      */
     getInitiator() {
         return this._initiator;
@@ -67,7 +67,7 @@ export default class JibriSession {
     /**
      * Returns the jid of the participant that stopped the session.
      *
-     * @returns {JitsiParticipant|undefined} The participant that stopped the session.
+     * @returns {JitsiParticipant|string} The participant that stopped the session.
      */
     getTerminator() {
         return this._terminator;
@@ -115,17 +115,18 @@ export default class JibriSession {
     }
 
     /**
-     * Sets the creator's jid of the session.
-     * @param {JitsiParticipant} participant - The creator of the session.
+     * Sets the participant that started the session.
+     * @param {JitsiParticipant | string} participant - The participant or resource id
+     * if local participant.
      */
     setInitiator(participant) {
         this._initiator = participant;
     }
 
     /**
-     * Sets the jid of the participant that stopped the session.
-     * @param {JitsiParticipant} participant  - The participant's jid,
-     * that stopped the session.
+     * Sets the participant that stopped the session.
+     * @param {JitsiParticipant | string} participant - The participant or the resource id
+     * if local participant.
      */
     setTerminator(participant) {
         this._terminator = participant;
@@ -144,7 +145,7 @@ export default class JibriSession {
      * @param {string} options.focusMucJid - The JID of the focus participant
      * that controls recording.
      * @param {streamId} options.streamId - Necessary for live streaming, this
-     * is the the stream key needed to start a live streaming session with the
+     * is the stream key needed to start a live streaming session with the
      * streaming service provider.
      * @returns Promise
      */
@@ -211,7 +212,7 @@ export default class JibriSession {
      * @param {string} options.focusMucJid - The JID of the focus participant
      * that controls recording.
      * @param {streamId} options.streamId - Necessary for live streaming, this
-     * is the the stream key needed to start a live streaming session with the
+     * is the stream key needed to start a live streaming session with the
      * streaming service provider.
      * @returns Object - The XMPP IQ message.
      */

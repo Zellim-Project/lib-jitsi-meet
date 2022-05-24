@@ -1,7 +1,8 @@
-import { getLogger } from 'jitsi-meet-logger';
+import { getLogger } from '@jitsi/logger';
 
 import RTCEvents from '../../service/RTC/RTCEvents';
 import { createBridgeChannelClosedEvent } from '../../service/statistics/AnalyticsEvents';
+import FeatureFlags from '../flags/FeatureFlags';
 import Statistics from '../statistics/statistics';
 import GlobalOnErrorHandler from '../util/GlobalOnErrorHandler';
 
@@ -21,9 +22,8 @@ export default class BridgeChannel {
      * instance.
      * @param {string} [wsUrl] WebSocket URL.
      * @param {EventEmitter} emitter the EventEmitter instance to use for event emission.
-     * @param {function} senderVideoConstraintsChanged callback to call when the sender video constraints change.
      */
-    constructor(peerconnection, wsUrl, emitter, senderVideoConstraintsChanged) {
+    constructor(peerconnection, wsUrl, emitter) {
         if (!peerconnection && !wsUrl) {
             throw new TypeError('At least peerconnection or wsUrl must be given');
         } else if (peerconnection && wsUrl) {
@@ -52,8 +52,6 @@ export default class BridgeChannel {
 
         // Indicates whether the connection was closed from the client or not.
         this._closedFromClient = false;
-
-        this._senderVideoConstraintsChanged = senderVideoConstraintsChanged;
 
         // If a RTCPeerConnection is given, listen for new RTCDataChannel
         // event.
@@ -178,6 +176,18 @@ export default class BridgeChannel {
     }
 
     /**
+     * Sends local stats via the bridge channel.
+     * @param {Object} payload The payload of the message.
+     * @throws NetworkError/InvalidStateError/Error if the operation fails or if there is no data channel created.
+     */
+    sendEndpointStatsMessage(payload) {
+        this._send({
+            colibriClass: 'EndpointStats',
+            ...payload
+        });
+    }
+
+    /**
      * Sends message via the channel.
      * @param {string} to The id of the endpoint that should receive the
      * message. If "" the message will be sent to all participants.
@@ -208,22 +218,6 @@ export default class BridgeChannel {
     }
 
     /**
-     * Sends a "pinned endpoint changed" message via the channel.
-     * @param {string} endpointId The id of the pinned endpoint.
-     * @throws NetworkError or InvalidStateError from RTCDataChannel#send (@see
-     * {@link https://developer.mozilla.org/docs/Web/API/RTCDataChannel/send})
-     * or from WebSocket#send or Error with "No opened channel" message.
-     */
-    sendPinnedEndpointMessage(endpointId) {
-        logger.log(`Sending pinned endpoint: ${endpointId}.`);
-
-        this._send({
-            colibriClass: 'PinnedEndpointChangedEvent',
-            pinnedEndpoint: endpointId || null
-        });
-    }
-
-    /**
      * Sends a "selected endpoints changed" message via the channel.
      *
      * @param {Array<string>} endpointIds - The ids of the selected endpoints.
@@ -250,6 +244,49 @@ export default class BridgeChannel {
         this._send({
             colibriClass: 'ReceiverVideoConstraint',
             maxFrameHeight: maxFrameHeightPixels
+        });
+    }
+
+    /**
+     * Sends a 'ReceiverVideoConstraints' message via the bridge channel.
+     *
+     * @param {ReceiverVideoConstraints} constraints video constraints.
+     */
+    sendNewReceiverVideoConstraintsMessage(constraints) {
+        logger.log(`Sending ReceiverVideoConstraints with ${JSON.stringify(constraints)}`);
+        this._send({
+            colibriClass: 'ReceiverVideoConstraints',
+            ...constraints
+        });
+    }
+
+    /**
+     * Sends a 'VideoTypeMessage' message via the bridge channel.
+     *
+     * @param {string} videoType 'camera', 'desktop' or 'none'.
+     * @deprecated to be replaced with sendSourceVideoTypeMessage
+     */
+    sendVideoTypeMessage(videoType) {
+        logger.debug(`Sending VideoTypeMessage with video type as ${videoType}`);
+        this._send({
+            colibriClass: 'VideoTypeMessage',
+            videoType
+        });
+    }
+
+    /**
+     * Sends a 'VideoTypeMessage' message via the bridge channel.
+     *
+     * @param {BridgeVideoType} videoType - the video type.
+     * @param {SourceName} sourceName - the source name of the video track.
+     * @returns {void}
+     */
+    sendSourceVideoTypeMessage(sourceName, videoType) {
+        logger.info(`Sending SourceVideoTypeMessage with video type ${sourceName}: ${videoType}`);
+        this._send({
+            colibriClass: 'SourceVideoTypeMessage',
+            sourceName,
+            videoType
         });
     }
 
@@ -296,11 +333,10 @@ export default class BridgeChannel {
 
             switch (colibriClass) {
             case 'DominantSpeakerEndpointChangeEvent': {
-                // Endpoint ID from the Videobridge.
-                const dominantSpeakerEndpoint = obj.dominantSpeakerEndpoint;
+                const { dominantSpeakerEndpoint, previousSpeakers = [] } = obj;
 
-                logger.info(`New dominant speaker: ${dominantSpeakerEndpoint}.`);
-                emitter.emit(RTCEvents.DOMINANT_SPEAKER_CHANGED, dominantSpeakerEndpoint);
+                logger.debug(`Dominant speaker: ${dominantSpeakerEndpoint}, previous speakers: ${previousSpeakers}`);
+                emitter.emit(RTCEvents.DOMINANT_SPEAKER_CHANGED, dominantSpeakerEndpoint, previousSpeakers);
                 break;
             }
             case 'EndpointConnectivityStatusChangeEvent': {
@@ -317,12 +353,31 @@ export default class BridgeChannel {
 
                 break;
             }
-            case 'LastNEndpointsChangeEvent': {
-                // The new/latest list of last-n endpoint IDs (i.e. endpoints for which the bridge is sending video).
-                const lastNEndpoints = obj.lastNEndpoints;
+            case 'EndpointStats': {
+                emitter.emit(RTCEvents.ENDPOINT_STATS_RECEIVED, obj.from, obj);
 
-                logger.info(`New forwarded endpoints: ${lastNEndpoints}`);
-                emitter.emit(RTCEvents.LASTN_ENDPOINT_CHANGED, lastNEndpoints);
+                break;
+            }
+            case 'LastNEndpointsChangeEvent': {
+                if (!FeatureFlags.isSourceNameSignalingEnabled()) {
+                    // The new/latest list of last-n endpoint IDs (i.e. endpoints for which the bridge is sending
+                    // video).
+                    const lastNEndpoints = obj.lastNEndpoints;
+
+                    logger.info(`New forwarded endpoints: ${lastNEndpoints}`);
+                    emitter.emit(RTCEvents.LASTN_ENDPOINT_CHANGED, lastNEndpoints);
+                }
+
+                break;
+            }
+            case 'ForwardedSources': {
+                if (FeatureFlags.isSourceNameSignalingEnabled()) {
+                    // The new/latest list of forwarded sources
+                    const forwardedSources = obj.forwardedSources;
+
+                    logger.info(`New forwarded sources: ${forwardedSources}`);
+                    emitter.emit(RTCEvents.FORWARDED_SOURCES_CHANGED, forwardedSources);
+                }
 
                 break;
             }
@@ -331,8 +386,31 @@ export default class BridgeChannel {
 
                 if (videoConstraints) {
                     logger.info(`SenderVideoConstraints: ${JSON.stringify(videoConstraints)}`);
-                    this._senderVideoConstraintsChanged(videoConstraints);
+                    emitter.emit(RTCEvents.SENDER_VIDEO_CONSTRAINTS_CHANGED, videoConstraints);
                 }
+                break;
+            }
+            case 'SenderSourceConstraints': {
+                if (FeatureFlags.isSourceNameSignalingEnabled()) {
+                    const { sourceName, maxHeight } = obj;
+
+                    if (typeof sourceName === 'string' && typeof maxHeight === 'number') {
+                        // eslint-disable-next-line object-property-newline
+                        logger.info(`SenderSourceConstraints: ${JSON.stringify({ sourceName, maxHeight })}`);
+                        emitter.emit(
+                            RTCEvents.SENDER_VIDEO_CONSTRAINTS_CHANGED, {
+                                sourceName,
+                                maxHeight
+                            }
+                        );
+                    } else {
+                        logger.error(`Invalid SenderSourceConstraints: ${JSON.stringify(obj)}`);
+                    }
+                }
+                break;
+            }
+            case 'ServerHello': {
+                logger.info(`Received ServerHello, version=${obj.version}.`);
                 break;
             }
             default: {

@@ -1,6 +1,5 @@
-const AudioRecorder = require('./audioRecorder');
-const SphinxService = require(
-    './transcriptionServices/SphinxTranscriptionService');
+import AudioRecorder from './audioRecorder';
+import SphinxService from './transcriptionServices/SphinxTranscriptionService';
 
 const BEFORE_STATE = 'before';
 const RECORDING_STATE = 'recording';
@@ -85,7 +84,7 @@ Transcriber.prototype.stop = function stop(callback) {
     console.log('stopping recording and sending audio files');
     this.audioRecorder.stop();
 
-    // and send all recorded audio the the transcription service
+    // and send all recorded audio to the transcription service
     const callBack = blobCallBack.bind(null, this);
 
     this.audioRecorder.getRecordingResults().forEach(recordingResult => {
@@ -357,4 +356,4 @@ Transcriber.prototype.reset = function() {
     this.lineLength = 0;
 };
 
-module.exports = Transcriber;
+export default Transcriber;

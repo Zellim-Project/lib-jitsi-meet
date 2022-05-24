@@ -1,36 +1,11 @@
-/* global MediaRecorder, MediaStream */
-
-const RecordingResult = require('./recordingResult');
+import RecordingResult from './recordingResult';
+import TrackRecorder from './trackRecorder';
 
 /**
  * Possible audio formats MIME types
  */
 const AUDIO_WEBM = 'audio/webm'; // Supported in chrome
 const AUDIO_OGG = 'audio/ogg'; // Supported in firefox
-
-/**
- * A TrackRecorder object holds all the information needed for recording a
- * single JitsiTrack (either remote or local)
- * @param track The JitsiTrack the object is going to hold
- */
-const TrackRecorder = function(track) {
-    // The JitsiTrack holding the stream
-    this.track = track;
-
-    // The MediaRecorder recording the stream
-    this.recorder = null;
-
-    // The array of data chunks recorded from the stream
-    // acts as a buffer until the data is stored on disk
-    this.data = null;
-
-    // the name of the person of the JitsiTrack. This can be undefined and/or
-    // not unique
-    this.name = null;
-
-    // the time of the start of the recording
-    this.startTime = null;
-};
 
 /**
  * Starts the recording of a JitsiTrack in a TrackRecorder object.
@@ -95,7 +70,7 @@ function AudioRecorder(jitsiConference) {
 }
 
 /**
- * Add the the exported module so that it can be accessed by other files
+ * Add the exported module so that it can be accessed by other files
  */
 AudioRecorder.determineCorrectFileType = determineCorrectFileType;
 
@@ -134,7 +109,7 @@ AudioRecorder.prototype.instantiateTrackRecorder = function(track) {
 
     // Create a new stream which only holds the audio track
     const originalStream = trackRecorder.track.getOriginalStream();
-    const stream = createEmptyStream();
+    const stream = new MediaStream();
 
     originalStream.getAudioTracks().forEach(t => stream.addTrack(t));
 
@@ -301,18 +276,6 @@ AudioRecorder.prototype.getFileType = function() {
 };
 
 /**
- * Creates a empty MediaStream object which can be used
- * to add MediaStreamTracks to
- * @returns MediaStream
- */
-function createEmptyStream() {
-    if (typeof MediaStream !== 'undefined') {
-        return new MediaStream();
-    }
-    throw new Error('cannot create a clean mediaStream');
-}
-
-/**
  * export the main object AudioRecorder
  */
-module.exports = AudioRecorder;
+export default AudioRecorder;
