@@ -2393,8 +2393,8 @@ JitsiConference.prototype._setBridgeChannel = function(offerIq, pc) {
  * @private
  */
 JitsiConference.prototype._rejectIncomingCall = function(jingleSession, options) {
-    if (options && options.errorMsg) {
-        GlobalOnErrorHandler.callErrorHandler(new Error(options.errorMsg));
+    if (options?.errorMsg) {
+        logger.warn(options.errorMsg);
     }
 
     // Terminate the jingle session with a reason
@@ -3677,7 +3677,7 @@ JitsiConference.prototype._updateRoomPresence = function(jingleSession, ctx) {
         if (track.getType() === MediaType.VIDEO) {
             videoTypeChanged = this._setNewVideoType(track);
         }
-        presenceChanged = muteStatusChanged || videoTypeChanged;
+        presenceChanged = presenceChanged || muteStatusChanged || videoTypeChanged;
     }
 
     // Set the presence in the legacy format if there are no local tracks and multi stream support is not enabled.
